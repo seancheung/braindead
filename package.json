@@ -1,0 +1,19 @@
+{
+    "name": "braindead",
+    "version": "0.1.0",
+    "description": "websocket cli client and replicator",
+    "author": "seancheung <theoxuanx@gmail.com>",
+    "license": "MIT",
+    "main": "index.js",
+    "bin": "braindead",
+    "dependencies": {
+        "bluebird": "^3.5.1",
+        "chalk": "^2.3.0",
+        "commander": "^2.12.2",
+        "debug": "^3.1.0",
+        "js-yaml": "^3.10.0",
+        "moment": "^2.20.1",
+        "pomelo-protocol": "^0.1.6",
+        "ws": "^3.3.3"
+    }
+}
