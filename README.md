@@ -17,7 +17,7 @@ braindead -h
 Output:
 
 ```text
-Usage: caster [options] [files]
+Usage: braindead [options] [files]
 
   run client shell or replicator
 
