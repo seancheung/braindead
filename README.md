@@ -148,7 +148,7 @@ braindead replicate client1.yaml,client2.yaml,client3.yaml
     route: 'gate.handler.connect'
     data:
       udid:
-        $eval: '$args.name'
+        $eval: '$options.name'
     expect: 'code === 200'
     success: '$session.host = host; $session.port = port'
 - disconnect:
@@ -163,7 +163,7 @@ braindead replicate client1.yaml,client2.yaml,client3.yaml
 - emit:
     route: 'connector.handler.login'
     udid:
-        $eval: '$args.name'
+        $eval: '$options.name'
     expect: 'code === 200'
 - emit:
     route: 'connector.handler.changeRoom'
@@ -258,7 +258,7 @@ braindead replicate client1.yaml,client2.yaml,client3.yaml
 
 #### Interpolation
 
-`$session`, `$options`, `$args`, `$env` can be used in `$eval`, `expect`, and `success`.
+`$session`, `$options`, `$env` can be used in `$eval`, `expect`, and `success`.
 
 `$eval` can be used in `connect` and `emit`.
 
@@ -291,19 +291,6 @@ Fetch variables stored in session.
 **$options**
 
 Fetch variables stored in options. Available variables are `host`, `port`, `ssl`, `uri`, `timeout`, `interval`, `concurrency`, `level` and `prefix`.
-
-**$args**
-
-Fetch variables stored in arguments(replicator only). Available variables are `id`, `name` and `domain`.
-
-```yaml
-- emit:
-    route: 'gate.handler.connect'
-    data:
-      udid: '$args.id'
-    expect: 'code === 200'
-    success: '$session.host = host; $session.port = port'
-```
 
 **$env**
 

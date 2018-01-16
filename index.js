@@ -79,7 +79,7 @@ function exec(files) {
 
 function replicate(files, options) {
     const Runner = require('./runner');
-    const runners = files.split(/\s*,\s*/).map(file => {
+    const yamls = files.split(/\s*,\s*/).map(file => {
         if (!file) {
             throw new Error('yaml file must be specified');
         }
@@ -97,45 +97,45 @@ function replicate(files, options) {
             throw new Error('invalid yaml format');
         }
 
-        return new Runner(yaml);
+        return yaml;
     });
     const Replicator = require('./replicator');
     const prefix = options.prefix || `_${Date.now()}_robot_`;
     const replicator = new Replicator(
-        runners.map(runner => (id, rep) => {
+        yamls.map(yaml => (id, rep) => {
             const name = `${prefix}${id}`;
             const domain = `<${name}>`;
             rep.info(domain, 'started');
             rep.warn('ccu:', `${rep.concurrency}/${rep.maxConcurrency}`);
-            runner
-                .run(
-                    {
-                        verbose: (...args) => rep.verbose(domain, ...args),
-                        info: (...args) => rep.info(domain, ...args),
-                        warn: (...args) => rep.warn(domain, ...args),
-                        error: err => {
-                            rep.error(domain, err.message);
-                            rep.dispose(id);
-                        },
-                        end: () => {
-                            rep.info(domain, 'complete');
-                            rep.warn(
-                                'ccu:',
-                                `${rep.concurrency}/${rep.maxConcurrency}`
-                            );
-                            rep.dispose(id);
-                        }
+            const runner = new Runner(
+                yaml,
+                {
+                    verbose: (...args) => rep.verbose(domain, ...args),
+                    info: (...args) => rep.info(domain, ...args),
+                    warn: (...args) => rep.warn(domain, ...args),
+                    error: err => {
+                        rep.error(domain, err.message);
+                        rep.dispose(id);
                     },
-                    {
-                        id,
-                        name,
-                        domain
+                    end: () => {
+                        rep.info(domain, 'complete');
+                        rep.warn(
+                            'ccu:',
+                            `${rep.concurrency}/${rep.maxConcurrency}`
+                        );
+                        rep.dispose(id);
                     }
-                )
-                .catch(err => {
-                    rep.error(domain, err.message);
-                    process.exit(1);
-                });
+                },
+                {
+                    id,
+                    name,
+                    domain
+                }
+            );
+            runner.run().catch(err => {
+                rep.error(domain, err.message);
+                process.exit(1);
+            });
         }),
         options
     );
@@ -282,5 +282,3 @@ function shell(client, domain, dump, info) {
 function danger(err) {
     console.error(chalk.red(require('util').inspect(err)));
 }
-
-exec();
