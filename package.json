@@ -1,6 +1,6 @@
 {
     "name": "braindead",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "description": "websocket cli client and replicator",
     "author": "seancheung <theoxuanx@gmail.com>",
     "license": "MIT",

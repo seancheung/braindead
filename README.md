@@ -114,23 +114,24 @@ braindead replicate client1.yaml,client2.yaml,client3.yaml
 - emit:
     route: 'gate.handler.connect'
     data:
-      udid: &udid '123456'
-    expect:
-      code: 200
-    session:
-      host: 'host'
-      port: 'port'
+      udid:
+        $eval: '$options.name'
+    expect: 'code === 200'
+    success: '$session.host = host; $session.port = port'
 - disconnect:
 - sleep: 500
 - connect:
-    host: '$session.host'
-    port: '$session.port'
+     host:
+      $eval: '$session.host'
+    port:
+      $eval: '$session.port'
     ssl: true
     timeout: 5000
 - emit:
     route: 'connector.handler.login'
     data:
-      udid: *udid
+      udid:
+        $eval: '$options.name'
 - emit: 'connector.handler.changeRoom'
 - emit: 'room.roomHandler.enterRoom'
 - emit: 'connector.handler.logout'
@@ -146,39 +147,35 @@ braindead replicate client1.yaml,client2.yaml,client3.yaml
 - emit:
     route: 'gate.handler.connect'
     data:
-      udid: &udid '$args.name'
-    expect:
-      code: 200
-    session:
-      host: 'host'
-      port: 'port'
+      udid:
+        $eval: '$args.name'
+    expect: 'code === 200'
+    success: '$session.host = host; $session.port = port'
 - disconnect:
 - sleep: 500
 - connect:
-    host: '$session.host'
-    port: '$session.port'
+    host:
+      $eval: '$session.host'
+    port:
+      $eval: '$session.port'
     ssl: true
     timeout: 30000
 - emit:
     route: 'connector.handler.login'
-    data:
-      udid: *udid
-    expect:
-      code: 200
+    udid:
+        $eval: '$args.name'
+    expect: 'code === 200'
 - emit:
     route: 'connector.handler.changeRoom'
-    expect:
-      code: 200
+    expect: 'code === 200'
 - emit:
     route: 'room.roomHandler.enterRoom'
-    expect:
-      code: 200
+    expect: 'code === 200'
 - emit:
     route: 'room.userHandler.unlockSlot'
     data:
       slotId: 1
-    expect:
-      code: /200|400/
+    expect: '/^(200|400)$/.test(code)'
 - sleep: 500
 - emit:
     route: 'connector.handler.changeRoom'
@@ -186,18 +183,15 @@ braindead replicate client1.yaml,client2.yaml,client3.yaml
       slotId: 1
       mode: 1
       type: 2
-    expect:
-      code: 200
+    expect: 'code === 200'
 - emit:
     route: 'room.roomHandler.enterRoom'
-    expect:
-      code: 200
+    expect: 'code === 200'0
 - emit:
     route: 'room.slotsHandler.spin'
     data:
       bet: 1000
-    expect:
-      code: 200
+    expect: 'code === 200'
     repeat:
       sleep: 6000
 ```
@@ -241,18 +235,10 @@ braindead replicate client1.yaml,client2.yaml,client3.yaml
     # request data(optional)
     data:
       udid: '123456'
-    # response test(optional)
-    expect:
-      # <var name in response>: <expected value>
-      code: 200
-      user:
-        # string encoded with '/' will be treated as regex
-        id: '/^__test__/'
-    # write to session(optional)
-    session:
-      # <var name in session>: <path in response>
-      id: 'user.id'
-      name: 'user.name'
+    # response test(optional) run in the context with current response data and global data
+    expect: 'code === 200'
+    # success hook(optional) run in the context with current response data and global data
+    success: '$session.user = user'
     # repeat(optional)
     repeat:
       # count(optional, omit to make infinite loop)
@@ -272,7 +258,9 @@ braindead replicate client1.yaml,client2.yaml,client3.yaml
 
 #### Interpolation
 
-`$session`, `$opts`, `$args`, `$env` can be used in `connect` and `emit`.
+`$session`, `$options`, `$args`, `$env` can be used in `$eval`, `expect`, and `success`.
+
+`$eval` can be used in `connect` and `emit`.
 
 **$session**
 
@@ -280,23 +268,27 @@ Fetch variables stored in session.
 
 ```yaml
 - connect:
-    host: '$session.host'
-    port: '$session.port'
+    host:
+      $eval: '$session.host'
+    port:
+      $eval: '$session.port'
 ```
 
 ```yaml
 - emit:
-    route: '$session.route'
+    route:
+      $eval: '$session.route'
 ```
 
 ```yaml
 - emit:
     route: 'room.userHanlder.unlock'
     data:
-      id: '$session.id'
+      id:
+        $eval: '$session.id'
 ```
 
-**$opts**
+**$options**
 
 Fetch variables stored in options. Available variables are `host`, `port`, `ssl`, `uri`, `timeout`, `interval`, `concurrency`, `level` and `prefix`.
 
@@ -309,11 +301,8 @@ Fetch variables stored in arguments(replicator only). Available variables are `i
     route: 'gate.handler.connect'
     data:
       udid: '$args.id'
-    expect:
-      code: 200
-    session:
-      host: 'host'
-      port: 'port'
+    expect: 'code === 200'
+    success: '$session.host = host; $session.port = port'
 ```
 
 **$env**
@@ -325,5 +314,6 @@ Fetch variables stored in environment variables.
 - emit:
     route: 'room.userHanlder.check'
     data:
-      env: '$env.NODE_ENV'
+      env:
+        $eval: '$env.NODE_ENV'
 ```

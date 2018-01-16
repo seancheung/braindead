@@ -1,4 +1,5 @@
 const Promise = require('bluebird');
+const vm = require('vm');
 
 module.exports = class Runner {
 
@@ -27,7 +28,7 @@ module.exports = class Runner {
 
                 return () => {
                     let uri, host, port, ssl;
-                    const options = this.replace(value);
+                    const options = this.parse(value);
                     if (typeof options === 'string') {
                         uri = options;
                     } else if (options.host && options.port) {
@@ -77,7 +78,7 @@ module.exports = class Runner {
                 }
 
                 return () => {
-                    const output = this.replace(value);
+                    const output = this.parse(value);
                     this.debug.verbose(JSON.stringify(output));
                 };
             }
@@ -102,12 +103,12 @@ module.exports = class Runner {
                 }
                 const data = value.data;
                 const expect = value.expect;
-                const session = value.session;
-                if (expect && typeof expect !== 'object') {
-                    throw new Error('done must be an object');
+                const success = value.success;
+                if (expect && typeof expect !== 'string') {
+                    throw new Error('done must be a string');
                 }
-                if (session && typeof session !== 'object') {
-                    throw new Error('session must be an object');
+                if (success && typeof success !== 'string') {
+                    throw new Error('success must be a string');
                 }
                 const repeat = value.repeat;
                 if (repeat && typeof repeat !== 'object') {
@@ -124,7 +125,7 @@ module.exports = class Runner {
                 this.forever = repeat && !count;
 
                 return () => {
-                    const msg = this.replace(data);
+                    const msg = this.parse(data);
                     if (msg === undefined) {
                         this.debug.info(`emit: ${route}`);
                     } else {
@@ -136,10 +137,20 @@ module.exports = class Runner {
                         this.client.request(route, msg).then(res => {
                             this.debug.verbose(JSON.stringify(res));
                             if (expect) {
-                                this.expect(res, expect);
+                                if (
+                                    !this.evaluate(
+                                        expect,
+                                        Object.assign(res, this.sanbox)
+                                    )
+                                ) {
+                                    throw new Error(`unexpected: ${expect}`);
+                                }
                             }
-                            if (session) {
-                                this.update(session, res);
+                            if (success) {
+                                this.evaluate(
+                                    success,
+                                    Object.assign(res, this.sanbox)
+                                );
                             }
                         });
                     if (!repeat) {
@@ -189,46 +200,40 @@ module.exports = class Runner {
         });
     }
 
-    update(session, data) {
-        Object.keys(session).forEach(key => {
-            if (typeof session[key] !== 'string') {
-                throw new Error('session properties must be strings');
-            }
-            this.$session[key] = session[key]
-                .split('.')
-                .reduce((v, c) => v[c], data);
-        });
+    get sanbox() {
+        return {
+            $options: this.$options,
+            $session: this.$session,
+            $args: this.$args,
+            $env: process.env
+        };
     }
 
-    replace(data) {
-        if (typeof data === 'string') {
-            if (data.startsWith('$session.')) {
-                data = data
-                    .split('.')
-                    .slice(1)
-                    .reduce((v, c) => v[c], this.$session);
-            } else if (data.startsWith('$opts.')) {
-                data = data
-                    .split('.')
-                    .slice(1)
-                    .reduce((v, c) => v[c], this.$options);
-            } else if (data.startsWith('$args.')) {
-                data = data
-                    .split('.')
-                    .slice(1)
-                    .reduce((v, c) => v[c], this.$args);
-            } else if (data.startsWith('$env.')) {
-                const [, key] = data.split(/\s+(.+)/, 2);
-                data = process.env[key];
+    evaluate(code, context) {
+        return vm.runInNewContext(code, context || this.sanbox);
+    }
+
+    parse(arg) {
+        if (!arg) {
+            return arg;
+        }
+        if (Array.isArray(arg)) {
+            for (let i = 0; i < arg.length; i++) {
+                arg[i] = this.parse(arg[i]);
             }
-        } else if (typeof data === 'object') {
-            data = JSON.parse(JSON.stringify(data));
-            Object.keys(data).forEach(key => {
-                data[key] = this.replace(data[key]);
-            });
+
+            return arg;
+        }
+        if (typeof arg === 'object') {
+            if (typeof arg.$eval === 'string') {
+                return this.evaluate(arg.$eval);
+            }
+            for (const key in arg) {
+                arg[key] = this.parse(arg[key]);
+            }
         }
 
-        return data;
+        return arg;
     }
 
     run(debug, args) {
@@ -272,37 +277,6 @@ module.exports = class Runner {
         } else {
             this.debug.info('disconnected');
         }
-    }
-
-    expect(source, test) {
-        if (!source && !test) {
-            return;
-        }
-        if (
-            typeof test === 'string' &&
-            /^\/.+\/$/.test(test) &&
-            typeof source !== 'object'
-        ) {
-            if (
-                new RegExp(test.slice(1, test.length - 1)).test(String(source))
-            ) {
-                return;
-            }
-        }
-        if (typeof source !== typeof test) {
-            throw new Error(
-                `${JSON.stringify(source)} !== ${JSON.stringify(test)}`
-            );
-        }
-        if (source === test) {
-            return;
-        }
-        if (typeof source !== 'object') {
-            throw new Error(
-                `${JSON.stringify(source)} !== ${JSON.stringify(test)}`
-            );
-        }
-        Object.keys(test).forEach(key => this.expect(source[key], test[key]));
     }
 
 };
