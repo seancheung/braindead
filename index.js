@@ -5,152 +5,81 @@ const path = require('path');
 const fs = require('fs');
 const chalk = require('chalk');
 
+program.version('0.1.0');
+
 program
-    .version('0.1.0')
-    .description('run client shell or replicator')
-    .arguments('[files]')
+    .command('interact')
+    .description('connect to server and open an interact shell')
     .option('-H, --host <host>', 'client host', 'localhost')
     .option('-P, --port <port>', 'client port')
     .option('-S, --ssl', 'enable SSL')
     .option('-U, --uri <address>', 'uri')
     .option('-t, --timeout <miliseconds>', 'request timeout')
-    .option('-r, --replicate', 'replicate clients')
+    .action(interact);
+
+program
+    .command('exec <files>')
+    .description('run client yaml script')
+    .action(exec);
+
+program
+    .command('replicate <files>')
+    .description('run replicator with an yaml script')
     .option('-i, --interval <miliseconds>', 'replicator intervel')
     .option('-c, --concurrency <count>', 'replicator concurrent count')
     .option('-l, --level <verbose|info|warn|error>', 'replicator log level')
     .option('-p, --prefix <prefix>', 'replicator instance id prefix')
     .option('-o, --log <path>', 'replicator log file path')
-    .parse(process.argv);
+    .action(replicate);
 
-function run() {
-    if (program.replicate && program.args && program.args.length > 0) {
-        return replicate();
-    }
+program.parse(process.argv);
 
-    if (program.args && program.args.length > 0) {
-        return Promise.map(program.args, file => {
-            if (!path.isAbsolute(file)) {
-                file = path.resolve(process.cwd(), file);
-            }
-            if (!/\.ya?ml$/.test(file)) {
-                throw new Error('only yaml format is supported');
-            }
-            if (!fs.existsSync(file)) {
-                throw new Error('file does not exist');
-            }
-            const yaml = require('js-yaml').safeLoad(
-                fs.readFileSync(file, 'utf8')
-            );
-            if (Array.isArray(yaml)) {
-                const Runner = require('./runner');
+function exec(files) {
+    return Promise.map(files.split(/\s*,\s*/), file => {
+        if (!path.isAbsolute(file)) {
+            file = path.resolve(process.cwd(), file);
+        }
+        if (!/\.ya?ml$/.test(file)) {
+            throw new Error('only yaml format is supported');
+        }
+        if (!fs.existsSync(file)) {
+            throw new Error('file does not exist');
+        }
+        const yaml = require('js-yaml').safeLoad(fs.readFileSync(file, 'utf8'));
+        if (Array.isArray(yaml)) {
+            const Runner = require('./runner');
 
-                return new Runner(yaml);
-            }
+            return new Runner(yaml);
+        }
 
-            throw new Error('invalid yaml');
+        throw new Error('invalid yaml');
+    })
+        .mapSeries(
+            runner =>
+                new Promise((resolve, reject) => {
+                    runner.run({
+                        verbose: (...args) => console.log(...args),
+                        info: (...args) => console.log(chalk.green(...args)),
+                        warn: (...args) => console.warn(chalk.yellow(...args)),
+                        error: err => {
+                            reject(err);
+                        },
+                        end: () => resolve()
+                    });
+                })
+        )
+        .then(() => {
+            process.exit(0);
         })
-            .mapSeries(
-                runner =>
-                    new Promise((resolve, reject) => {
-                        runner.run({
-                            verbose: (...args) => console.log(...args),
-                            info: (...args) =>
-                                console.log(chalk.green(...args)),
-                            warn: (...args) =>
-                                console.warn(chalk.yellow(...args)),
-                            error: err => {
-                                reject(err);
-                            },
-                            end: () => resolve()
-                        });
-                    })
-            )
-            .then(() => {
-                process.exit(0);
-            })
-            .catch(err => {
-                console.error(chalk.red(err));
-                process.exit(1);
-            });
-    }
-
-    if ((program.host && program.port) || program.uri) {
-        const Client = require('./client');
-        const client = new Client({
-            uri: program.uri,
-            host: program.host,
-            port: program.port,
-            ssl: program.ssl,
-            timeout: program.timeout,
-            errorHandler: err => {
-                console.error(
-                    chalk.red(
-                        JSON.stringify(err, Object.getOwnPropertyNames(err))
-                    )
-                );
-            },
-            disconnectHandler: (code, reason) => {
-                if (code !== 1000) {
-                    const args = [chalk.red('disconnected'), chalk.red(code)];
-                    if (reason) {
-                        args.push(JSON.stringify(reason));
-                    }
-                    console.error(...args);
-                }
-                process.exit(0);
-            },
-            messageHandler: (route, msg) => {
-                console.log(chalk.green(route), JSON.stringify(msg));
-            },
-            kickHandler: msg => {
-                console.warn(chalk.yellow('kicked'), JSON.stringify(msg));
-            }
+        .catch(err => {
+            console.error(chalk.red(err));
+            process.exit(1);
         });
-
-        const domian = `${client.protocol}://${client.host}:${client.port}`;
-
-        const open = () => client.connect();
-        const close = () => client.disconnect();
-        const info = () => {
-            console.log(
-                `${chalk.green('<route> [json message]')} send message`
-            );
-        };
-
-        const exec = input => {
-            const [route, body] = input.split(/\s+(.+)/, 2);
-
-            if (!route) {
-                return Promise.resolve();
-            }
-            let json;
-            if (body) {
-                try {
-                    json = JSON.parse(body);
-                } catch (err) {
-                    return Promise.reject(err);
-                }
-            }
-
-            return client.request(route, json);
-        };
-
-        return interact(
-            {
-                open,
-                close,
-                exec
-            },
-            domian,
-            arg => console.log(arg),
-            info
-        );
-    }
 }
 
-function replicate() {
+function replicate(files, options) {
     const Runner = require('./runner');
-    const runners = program.args.map(file => {
+    const runners = files.split(/\s*,\s*/).map(file => {
         if (!file) {
             throw new Error('yaml file must be specified');
         }
@@ -171,7 +100,7 @@ function replicate() {
         return new Runner(yaml);
     });
     const Replicator = require('./replicator');
-    const prefix = program.prefix || `_${Date.now()}_robot_`;
+    const prefix = options.prefix || `_${Date.now()}_robot_`;
     const replicator = new Replicator(
         runners.map(runner => (id, rep) => {
             const name = `${prefix}${id}`;
@@ -208,7 +137,7 @@ function replicate() {
                     process.exit(1);
                 });
         }),
-        program.opts()
+        options
     );
     replicator.debugger.verbose = (...args) => console.log(...args);
     replicator.debugger.info = (...args) => console.info(chalk.green(...args));
@@ -217,7 +146,76 @@ function replicate() {
     replicator.start();
 }
 
-function interact(client, domain, dump, info) {
+function interact(options) {
+    const Client = require('./client');
+    const client = new Client({
+        uri: options.uri,
+        host: options.host,
+        port: options.port,
+        ssl: options.ssl,
+        timeout: options.timeout,
+        errorHandler: err => {
+            console.error(
+                chalk.red(JSON.stringify(err, Object.getOwnPropertyNames(err)))
+            );
+        },
+        disconnectHandler: (code, reason) => {
+            if (code !== 1000) {
+                const args = [chalk.red('disconnected'), chalk.red(code)];
+                if (reason) {
+                    args.push(JSON.stringify(reason));
+                }
+                console.error(...args);
+            }
+            process.exit(0);
+        },
+        messageHandler: (route, msg) => {
+            console.log(chalk.green(route), JSON.stringify(msg));
+        },
+        kickHandler: msg => {
+            console.warn(chalk.yellow('kicked'), JSON.stringify(msg));
+        }
+    });
+
+    const domian = `${client.protocol}://${client.host}:${client.port}`;
+
+    const open = () => client.connect();
+    const close = () => client.disconnect();
+    const info = () => {
+        console.log(`${chalk.green('<route> [json message]')} send message`);
+    };
+
+    const exec = input => {
+        const [route, body] = input.split(/\s+(.+)/, 2);
+
+        if (!route) {
+            return Promise.resolve();
+        }
+        let json;
+        if (body) {
+            try {
+                json = JSON.parse(body);
+            } catch (err) {
+                return Promise.reject(err);
+            }
+        }
+
+        return client.request(route, json);
+    };
+
+    return shell(
+        {
+            open,
+            close,
+            exec
+        },
+        domian,
+        arg => console.log(arg),
+        info
+    );
+}
+
+function shell(client, domain, dump, info) {
     return client
         .open()
         .then(() => {
@@ -285,4 +283,4 @@ function danger(err) {
     console.error(chalk.red(require('util').inspect(err)));
 }
 
-run();
+exec();

@@ -17,20 +17,77 @@ braindead -h
 Output:
 
 ```text
-Usage: braindead [options] [files]
-
-  run client shell or replicator
+Usage: braindead [options] [command]
 
 
   Options:
 
-    -V, --version                          output the version number
-    -H, --host <host>                      client host (default: localhost)
-    -P, --port <port>                      client port
-    -S, --ssl                              enable SSL
-    -U, --uri <address>                    uri
-    -t, --timeout <miliseconds>            request timeout
-    -r, --replicate                        replicate clients
+    -V, --version  output the version number
+    -h, --help     output usage information
+
+  Commands:
+
+    interact [options]           connect to server and open an interact shell
+    exec <files>                 run client yaml script
+    replicate [options] <files>  run replicator with an yaml script
+```
+
+## Interaction Mode
+
+```text
+Usage: interact [options]
+
+  connect to server and open an interact shell
+
+
+  Options:
+
+    -H, --host <host>            client host (default: localhost)
+    -P, --port <port>            client port
+    -S, --ssl                    enable SSL
+    -U, --uri <address>          uri
+    -t, --timeout <miliseconds>  request timeout
+    -h, --help                   output usage information
+```
+
+Example:
+
+```bash
+braindead interact -H localhost -P 3014
+braindead interact -H localhost -P 3014 -S
+braindead interact -U wss://localhost:3014
+```
+
+## Executor Mode
+
+```text
+Usage: exec [options] <files>
+
+  run client yaml script
+
+
+  Options:
+
+    -h, --help  output usage information
+```
+
+Example:
+
+```bash
+braindead exec ./client.yaml
+braindead exec ./client1.yaml,./client2.yaml
+```
+
+## Replicator Mode
+
+```text
+Usage: replicate [options] <files>
+
+  run replicator with an yaml script
+
+
+  Options:
+
     -i, --interval <miliseconds>           replicator intervel
     -c, --concurrency <count>              replicator concurrent count
     -l, --level <verbose|info|warn|error>  replicator log level
@@ -39,24 +96,9 @@ Usage: braindead [options] [files]
     -h, --help                             output usage information
 ```
 
-## CLI Client
-
 ```bash
-braindead -H localhost -P 3014
-braindead -H localhost -P 3014 -S
-braindead -U wss://localhost:3014
-```
-
-## Yaml Client
-
-```bash
-braindead ./client.yaml
-```
-
-## Replicator
-
-```bash
-braindead -r -o test.log -i 1000 -c 500 ./client.yaml
+braindead replicate -o test.log -i 1000 -c 500 ./client.yaml
+braindead replicate client1.yaml,client2.yaml,client3.yaml
 ```
 
 ## Yaml Scripting
