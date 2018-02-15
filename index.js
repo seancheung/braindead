@@ -49,25 +49,20 @@ function exec(files) {
         if (Array.isArray(yaml)) {
             const Runner = require('./runner');
 
-            return new Runner(yaml);
+            return new Runner(yaml, {
+                verbose: (...args) => console.log(...args),
+                info: (...args) => console.log(chalk.green(...args)),
+                warn: (...args) => console.warn(chalk.yellow(...args)),
+                error: err => {
+                    danger(err);
+                    process.exit(1);
+                }
+            });
         }
 
         throw new Error('invalid yaml');
     })
-        .mapSeries(
-            runner =>
-                new Promise((resolve, reject) => {
-                    runner.run({
-                        verbose: (...args) => console.log(...args),
-                        info: (...args) => console.log(chalk.green(...args)),
-                        warn: (...args) => console.warn(chalk.yellow(...args)),
-                        error: err => {
-                            reject(err);
-                        },
-                        end: () => resolve()
-                    });
-                })
-        )
+        .mapSeries(runner => runner.run())
         .then(() => {
             process.exit(0);
         })
